@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIHI-FIDELIS - Punto de Venta</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Carga de React, ReactDOM y Babel para la Single Page App -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script>
+        // Registro del PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.error('SW Error:', err));
+            });
+        }
+    </script>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // Configuración Supabase
+        const supabaseUrl = 'https://rpqgsfygpnmjdzvshsve.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwcWdzZnlncG5tamR6dnNoc3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAwMjgsImV4cCI6MjA5NjQ5NjAyOH0.AiwdV_797xhYC725rQWoHoI-Id2RJp9g6w4B6Qpf_Xs'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        
+        // --- URL DE TU SERVIDOR BACKEND ---
+        const API_URL = 'http://localhost:3000'; // Cuando subas tu backend, cambiarás esto por "https://tu-backend.onrender.com"
+
+        // Obtener el MERCHANT_ID dinámicamente de la URL (Multi-tenant)
+        const urlParams = new URLSearchParams(window.location.search);
+        const MERCHANT_ID = urlParams.get('merchant') || '13a0c6ab-eed2-483e-bd0e-19123486b6ad'; // Fallback temporal para pruebas
+        if (!urlParams.has('merchant')) {
+            console.warn("Modo local sin ?merchant=. Usando el ID de prueba.");
+        }
+
+        // --- ICONOS SVG ---
+        const LeafIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>;
+        const UserPlusIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>;
+        const StarIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+        const GiftIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>;
+        const SearchIcon = () => <svg className="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+        const UsersIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>;
+        const QRIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect><rect x="14" y="14" width="3" height="3"></rect></svg>;
+        const LockIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
+
+        // Función para estandarizar teléfonos
+        const cleanPhone = (p) => p.replace(/\D/g, '');
+
+        // --- PANTALLA 1: REGISTRAR ---
+        function RegisterScreen({ showToast, setScreen }) {
+            const [name, setName] = useState('');
+            const [phone, setPhone] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!name || !phone) return showToast('Todos los campos son requeridos.', 'error');
+                
+                try {
+                    const { error } = await supabase.from('customers').insert([{ name, phone: cleanPhone(phone) }]);
+                    if (error) throw error;
+                    
+                    showToast(`¡Cliente ${name} registrado con éxito!`, 'success');
+                    setName(''); setPhone('');
+                } catch (err) {
+                    showToast(err.code === '23505' ? 'El teléfono ya existe.' : err.message, 'error');
+                }
+            };
+
+            return (
+                <div className="card">
+                    <div className="section-label">
+                        <div className="icon-badge green"><UserPlusIcon /></div>
+                        <div className="label-text">
+                            <h2>Nuevo Miembro</h2>
+                            <p>Crear una cuenta de lealtad</p>
+                        </div>
+                    </div>
+                    <form onSubmit={handleSubmit}>
+                        <div className="input-group">
+                            <label>Nombre del Cliente</label>
+                            <input type="text" placeholder="Juan Pérez" value={name} onChange={e => setName(e.target.value)} />
+                        </div>
+                        <div className="input-group">
+                            <label>Número de Teléfono</label>
+                            <input type="tel" placeholder="555-123-4567" value={phone} onChange={e => setPhone(e.target.value)} />
+                        </div>
+                        <button type="submit" className="btn-primary">Crear Cliente</button>
+                    </form>
+                    <div className="divider">o ir a</div>
+                    <div className="secondary-actions">
+                        <button type="button" className="btn-outline green" onClick={() => setScreen('award')}>Otorgar Puntos</button>
+                        <button type="button" className="btn-outline orange" onClick={() => setScreen('redeem')}>Canjear Puntos</button>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- PANTALLA: SUPER ADMIN (SaaS - Registro de Negocios) ---
+        function SuperAdminScreen({ showToast }) {
+            const [name, setName] = useState('');
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [logoUrl, setLogoUrl] = useState('');
+            const [primaryColor, setPrimaryColor] = useState('#27ae60');
+            const [newMerchant, setNewMerchant] = useState(null);
+            const [merchants, setMerchants] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            const loadMerchants = () => {
+                fetch(`${API_URL}/api/merchants`)
+                    .then(res => res.json())
+                    .then(data => { if(data.success) setMerchants(data.data); setLoading(false); })
+                    .catch(err => { showToast('Error cargando negocios', 'error'); setLoading(false); });
+            };
+
+            React.useEffect(() => { loadMerchants(); }, []);
+
+            const handleDeleteMerchant = async (id, name) => {
+                if (!window.confirm(`¿Estás seguro de que deseas eliminar el negocio "${name}"? Esta acción no se puede deshacer.`)) return;
+                
+                try {
+                    const res = await fetch(`${API_URL}/api/merchants/${id}`, {
+                        method: 'DELETE'
+                    });
+                    const result = await res.json();
+                    if (!res.ok || !result.success) throw new Error(result.error);
+                    
+                    showToast('Negocio eliminado con éxito', 'success');
+                    loadMerchants(); // Recargar la lista
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!name || !username || !password) return showToast('Todos los campos son requeridos', 'error');
+                try {
+                    const res = await fetch(`${API_URL}/api/merchants/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, username, password, logoUrl, primaryColor })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || !result.success) throw new Error(result.error);
+                    setNewMerchant(result.merchant);
+                    loadMerchants();
+                    showToast('Negocio registrado con éxito', 'success');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            };
+
+            if (newMerchant) {
+                const link = `${window.location.origin}/index.html?merchant=${newMerchant.id}`;
+                return (
+                    <div className="card" style={{ maxWidth: '500px', textAlign: 'center' }}>
+                        <div className="section-label" style={{ justifyContent: 'center' }}><div className="icon-badge green"><LeafIcon /></div></div>
+                        <h2>¡Negocio Creado!</h2>
+                        <p style={{ margin: '15px 0' }}>El negocio <strong>{newMerchant.name}</strong> está listo.</p>
+                        <div style={{ background: '#f8faf9', padding: '15px', borderRadius: '8px', wordBreak: 'break-all' }}>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Copia este enlace y envíaselo al dueño del local:</p>
+                            <a href={link} target="_blank" style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{link}</a>
+                        </div>
+                        <button className="btn-primary" onClick={() => { setNewMerchant(null); setName(''); setUsername(''); setPassword(''); setLogoUrl(''); setPrimaryColor('#27ae60'); }} style={{ marginTop: '20px' }}>Registrar otro negocio</button>
+                    </div>
+                );
+            }
+            return (
+                <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div className="card" style={{ maxWidth: '100%' }}>
+                        <div className="section-label">
+                            <div className="icon-badge" style={{ backgroundColor: '#2c3e50', color: 'white' }}><LeafIcon /></div>
+                            <div className="label-text"><h2>Super Admin SaaS</h2><p>Alta de nuevos comercios</p></div>
+                        </div>
+                        <form onSubmit={handleSubmit}>
+                            <div className="input-group">
+                                <label>Nombre del Nuevo Negocio</label>
+                                <input type="text" placeholder="Ej. Gimnasio Fit" value={name} onChange={e => setName(e.target.value)} required />
+                            </div>
+                            <div className="input-group">
+                                <label>Usuario del Administrador</label>
+                                <input type="text" placeholder="Ej. admin_fit" value={username} onChange={e => setUsername(e.target.value)} required />
+                            </div>
+                            <div className="input-group">
+                                <label>Contraseña</label>
+                                <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                            </div>
+                            <div className="input-group">
+                                <label>URL del Logo (Opcional)</label>
+                                <input type="url" placeholder="https://ejemplo.com/logo.png" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} />
+                            </div>
+                            <div className="input-group">
+                                <label>Color Principal de la Marca</label>
+                                <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} style={{ width: '100%', height: '40px', padding: '0', border: 'none', borderRadius: '8px', cursor: 'pointer' }} />
+                            </div>
+                            <button type="submit" className="btn-primary" style={{ backgroundColor: '#2c3e50' }}>Generar Sistema</button>
+                        </form>
+                    </div>
+
+                    <div className="card" style={{ maxWidth: '100%' }}>
+                        <div className="section-label">
+                            <div className="icon-badge green"><UsersIcon /></div>
+                            <div className="label-text"><h2>Negocios Activos</h2><p>Total: {merchants.length}</p></div>
+                        </div>
+                        {loading ? <p>Cargando lista...</p> : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+                                            <th style={{ padding: '10px' }}>Nombre</th>
+                                            <th style={{ padding: '10px' }}>Estrategia</th>
+                                            <th style={{ padding: '10px' }}>Acceso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {merchants.map((m, i) => (
+                                            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                                <td style={{ padding: '10px', fontWeight: 'bold' }}>{m.name}</td>
+                                                <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{m.points_strategy === 'VISIT' ? 'Por Visita' : 'Por Monto'}</td>
+                                                <td style={{ padding: '10px' }}>
+                                                    <a href={`${window.location.origin}/index.html?merchant=${m.id}`} target="_blank" style={{ color: 'var(--primary)', fontWeight: 'bold', textDecoration: 'none', marginRight: '15px' }}>Abrir Panel ↗</a>
+                                                    <button type="button" onClick={() => handleDeleteMerchant(m.id, m.name)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}>Eliminar</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- PANTALLA: AUTO-REGISTRO DEL CLIENTE (Vía QR o Enlace) ---
+        function SelfRegisterScreen({ showToast, setScreen }) {
+            const [name, setName] = useState('');
+            const [phone, setPhone] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!name || !phone) return showToast('Todos los campos son requeridos.', 'error');
+                
+                try {
+                    // Llama al backend que lo inscribe y le inicializa 0 puntos
+                    const res = await fetch(`${API_URL}/api/customers/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ merchantId: MERCHANT_ID, name, phone })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || !result.success) throw new Error(result.error);
+                    
+                    showToast(`¡Registro exitoso! Ahora puedes iniciar sesión.`, 'success');
+                    setName(''); setPhone('');
+                    setTimeout(() => setScreen('login'), 1500); // Redirige al login automáticamente
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            };
+
+            return (
+                <div className="card" style={{ maxWidth: '400px' }}>
+                    <div className="section-label">
+                        <div className="icon-badge green"><UserPlusIcon /></div>
+                        <div className="label-text">
+                            <h2>Únete a nuestro programa</h2>
+                            <p>Gana puntos y recompensas</p>
+                        </div>
+                    </div>
+                    <form onSubmit={handleSubmit}>
+                        <div className="input-group">
+                            <label>Tu Nombre</label>
+                            <input type="text" placeholder="Ej. Juan Pérez" value={name} onChange={e => setName(e.target.value)} required />
+                        </div>
+                        <div className="input-group">
+                            <label>Tu Teléfono (Será tu contraseña)</label>
+                            <input type="tel" placeholder="Ej. 555-123-4567" value={phone} onChange={e => setPhone(e.target.value)} required />
+                        </div>
+                        <button type="submit" className="btn-primary">Registrarme Gratis</button>
+                    </form>
+                    <div className="divider">o</div>
+                    <button type="button" className="btn-outline" onClick={() => setScreen('login')} style={{ width: '100%' }}>Ya tengo cuenta (Iniciar Sesión)</button>
+                </div>
+            );
+        }
+
+        // --- PANTALLA 2: OTORGAR PUNTOS ---
+        function AwardScreen({ showToast, setScreen }) {
+            const [phone, setPhone] = useState('');
+            const [amount, setAmount] = useState('');
+            const [sendSms, setSendSms] = useState(true);
+            
+            const previewPoints = 1; // 1 punto fijo por visita o factura
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!phone) return showToast('El teléfono es requerido.', 'error');
+                
+                try {
+                    // Buscar ID del cliente
+                    const { data, error: searchErr } = await supabase.from('customers').select('id, name').eq('phone', cleanPhone(phone));
+                    if (searchErr || !data.length) throw new Error('Cliente no encontrado.');
+                    
+                    // Llamar Backend
+                    const res = await fetch(`${API_URL}/api/transactions/earn`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            merchantId: MERCHANT_ID, 
+                            customerId: data[0].id, 
+                            customerPhone: phone,
+                            purchaseAmount: parseFloat(amount),
+                            sendSms: sendSms 
+                        })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || !result.success) throw new Error(result.error);
+
+                    showToast(`¡+${previewPoints} punto otorgado exitosamente!`, 'success');
+                    setPhone(''); setAmount('');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            };
+
+            return (
+                <div className="card">
+                    <div className="section-label">
+                        <div className="icon-badge green"><StarIcon /></div>
+                        <div className="label-text">
+                            <h2>Registrar Visita</h2>
+                            <p>1 punto por visita o factura pagada</p>
+                        </div>
+                    </div>
+                    <form onSubmit={handleSubmit}>
+                        <div className="input-group">
+                            <label>Teléfono del Cliente</label>
+                            <div className="input-wrapper">
+                                <SearchIcon />
+                                <input type="tel" className="with-icon" placeholder="555-123-4567" value={phone} onChange={e => setPhone(e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="input-group">
+                            <label>Monto de la Factura (Opcional para estadísticas)</label>
+                            <input type="number" step="0.01" placeholder="Ej. 150.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                        </div>
+                        
+                        <div className="live-preview green">
+                            <span>Puntos a otorgar</span>
+                            <span>+{previewPoints} pt</span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '1rem 0' }}>
+                            <input type="checkbox" id="sendSms" checked={sendSms} onChange={e => setSendSms(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }} />
+                            <label htmlFor="sendSms" style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0' }}>Enviar recibo por SMS al cliente</label>
+                        </div>
+
+                        <button type="submit" className="btn-primary">Otorgar Puntos</button>
+                    </form>
+                </div>
+            );
+        }
+
+        // --- PANTALLA 3: CANJEAR PUNTOS ---
+        function RedeemScreen({ showToast, setScreen }) {
+            const [phone, setPhone] = useState('');
+            const [points, setPoints] = useState('');
+            const [tiers, setTiers] = useState([{points: 5, name: 'Nivel 1'}, {points: 10, name: 'Nivel 2'}, {points: 20, name: 'Nivel 3'}]);
+
+            React.useEffect(() => {
+                // Cargar niveles desde la base de datos al abrir la pantalla
+                supabase.from('rewards').select('*').eq('merchant_id', MERCHANT_ID).order('points_required', {ascending: true})
+                .then(({data}) => {
+                    if (data && data.length > 0) {
+                        setTiers(data.map(d => ({ points: d.points_required, name: d.name })));
+                    }
+                });
+            }, []);
+
+            const handleCheckBalance = async () => {
+                if (!phone) return showToast('Ingresa un teléfono para consultar.', 'error');
+                try {
+                    const { data: customers, error: searchErr } = await supabase.from('customers').select('id, name').eq('phone', cleanPhone(phone));
+                    if (searchErr || !customers.length) throw new Error('Cliente no encontrado.');
+                    
+                    const { data: balances, error: balanceErr } = await supabase.from('customer_loyalty_balances')
+                        .select('points_balance')
+                        .eq('customer_id', customers[0].id)
+                        .eq('merchant_id', MERCHANT_ID);
+                    
+                    if (balanceErr) throw balanceErr;
+                    const currentBalance = balances.length ? balances[0].points_balance : 0;
+                    showToast(`${customers[0].name} tiene ${currentBalance} puntos disponibles.`, 'success');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!phone || !points) return showToast('Todos los campos son requeridos.', 'error');
+                if (points < 1) return showToast('Debes canjear al menos 1 punto.', 'error');
+                
+                try {
+                    const { data, error: searchErr } = await supabase.from('customers').select('id, name').eq('phone', cleanPhone(phone));
+                    if (searchErr || !data.length) throw new Error('Cliente no encontrado.');
+                    
+                    const res = await fetch(`${API_URL}/api/transactions/redeem`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ merchantId: MERCHANT_ID, customerId: data[0].id, pointsToRedeem: parseFloat(points) })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || !result.success) throw new Error(result.error);
+
+                    showToast(`¡${points} puntos canjeados exitosamente por una recompensa!`, 'accent');
+                    setPhone(''); setPoints('');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            };
+
+            return (
+                <div className="card">
+                    <div className="section-label">
+                        <div className="icon-badge orange"><GiftIcon /></div>
+                        <div className="label-text">
+                            <h2>Canjear Recompensa</h2>
+                            <p>Selecciona la recompensa a canjear</p>
+                        </div>
+                    </div>
+                    
+                    <div className="quick-tiers">
+                        {tiers.map((tier, idx) => (
+                            <button key={idx} type="button" className={`tier-btn ${points === tier.points ? 'selected' : ''}`} onClick={() => setPoints(tier.points)}>
+                                {tier.name} <br/> ({tier.points} pts)
+                            </button>
+                        ))}
+                    </div>
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="input-group">
+                            <label>Teléfono del Cliente</label>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <input type="tel" placeholder="555-123-4567" value={phone} onChange={e => setPhone(e.target.value)} style={{ flex: 1 }} />
+                                <button type="button" className="btn-outline orange" onClick={handleCheckBalance} style={{ padding: '0 15px', width: 'auto', flex: 'none' }}>Consultar Saldo</button>
+                            </div>
+                        </div>
+                        <div className="input-group">
+                            <label>Puntos a Canjear</label>
+                            <input type="number" step="1" min="1" placeholder="Ej. 10" value={points} onChange={e => setPoints(Number(e.target.value))} />
+                        </div>
+
+                        {points > 0 && (
+                            <div className="live-preview orange">
+                                <span>Se descontarán</span>
+                                <span>-{points} pts</span>
+                            </div>
+                        )}
+
+                        <button type="submit" className="btn-accent">Canjear Puntos</button>
+                    </form>
+                </div>
+            );
+        }
+
+        // --- PANTALLA DE LOGIN RESTRINGIDO ---
+        function LoginScreen({ showToast, onLogin, currentScreen, setScreen }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                
+                // 0. Acceso Maestro "Puerta Oculta": Permite entrar al SuperAdmin desde cualquier login
+                if (username === 'RPTMM98' && password === '311298') {
+                    onLogin({ role: 'superadmin' });
+                    if (currentScreen !== 'superadmin' && setScreen) setScreen('superadmin');
+                    showToast('Acceso autorizado como Super Administrador', 'success');
+                    return;
+                }
+
+                // Si intenta entrar explícitamente al link de superadmin y la clave es incorrecta
+                if (currentScreen === 'superadmin') {
+                    showToast('Credenciales maestras incorrectas', 'error');
+                    return;
+                }
+
+                // 1. Verificar si es el administrador dinámico del negocio
+                try {
+                    const adminRes = await fetch(`${API_URL}/api/merchants/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ merchantId: MERCHANT_ID, username, password })
+                    });
+                    const adminData = await adminRes.json();
+                    
+                    if (adminRes.ok && adminData.success) {
+                        onLogin({ role: 'admin' });
+                        showToast(`Acceso autorizado para ${adminData.merchant.name}`, 'success');
+                        return;
+                    }
+                } catch (err) {
+                    // Continuar silenciosamente (podría ser un cliente)
+                }
+
+                // Si intenta entrar a Otorgar o Canjear Puntos, BLOQUEAR si no es admin
+                if (currentScreen === 'award' || currentScreen === 'redeem') {
+                    showToast('Solo el Administrador puede otorgar o canjear puntos', 'error');
+                    return;
+                }
+
+                // 2. Verificar si es un cliente en la base de datos Supabase
+                try {
+                    const { data, error } = await supabase
+                        .from('customers')
+                        .select('id, name, phone')
+                        .ilike('name', username) // Compara el nombre ignorando mayúsculas/minúsculas
+                        .eq('phone', cleanPhone(password)); // Usa el teléfono limpio como contraseña
+
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        onLogin({ role: 'customer', data: data[0] });
+                        showToast(`Bienvenido, ${data[0].name}`, 'success');
+                    } else {
+                        showToast('Usuario o contraseña incorrectos', 'error');
+                    }
+                } catch (err) {
+                    showToast('Error al verificar credenciales', 'error');
+                }
+            };
+
+            return (
+                <div className="card" style={{ maxWidth: '400px' }}>
+                    <div className="section-label">
+                        <div className="icon-badge" style={{ backgroundColor: '#e2e8f0', color: '#2c3e50' }}><LockIcon /></div>
+                        <div className="label-text">
+                            <h2>{currentScreen === 'superadmin' ? 'Acceso Super Admin' : 'Acceso Restringido'}</h2>
+                            <p>{currentScreen === 'superadmin' ? 'Ingresa tus credenciales maestras' : 'Inicia sesión para continuar'}</p>
+                        </div>
+                    </div>
+                    <form onSubmit={handleLogin}>
+                        <div className="input-group">
+                            <label>{currentScreen === 'superadmin' ? 'Usuario Maestro' : 'Usuario del Negocio o Tu Nombre'}</label>
+                            <input type="text" placeholder={currentScreen === 'superadmin' ? "Ej. RPTMM98" : "Ej. admin_local o Juan Pérez"} value={username} onChange={e => setUsername(e.target.value)} required />
+                        </div>
+                        <div className="input-group">
+                            <label>{currentScreen === 'superadmin' ? 'Contraseña Maestra' : 'Contraseña o Tu Teléfono'}</label>
+                            <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                        </div>
+                        <button type="submit" className="btn-primary" style={{ backgroundColor: '#2c3e50' }}>Autorizar Acceso</button>
+                    </form>
+                </div>
+            );
+        }
+
+        // --- PANTALLA 4: DASHBOARD (MIS CLIENTES) ---
+        function DashboardScreen({ showToast }) {
+            const [customers, setCustomers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [tier1, setTier1] = useState(5);
+            const [tier2, setTier2] = useState(10);
+            const [tier3, setTier3] = useState(20);
+            const [tier1Name, setTier1Name] = useState('Nivel 1');
+            const [tier2Name, setTier2Name] = useState('Nivel 2');
+            const [tier3Name, setTier3Name] = useState('Nivel 3');
+            const qrLink = `${window.location.origin}/index.html?merchant=${MERCHANT_ID}&mode=client`;
+
+            React.useEffect(() => {
+                // Cargar clientes
+                fetch(`${API_URL}/api/merchants/${MERCHANT_ID}/customers`)
+                    .then(res => res.json())
+                    .then(data => { if(data.success) setCustomers(data.data); setLoading(false); })
+                    .catch(err => { showToast('Error cargando clientes', 'error'); setLoading(false); });
+
+                // Cargar recompensas guardadas
+                supabase.from('rewards').select('*').eq('merchant_id', MERCHANT_ID).order('points_required', {ascending: true})
+                    .then(({data}) => {
+                        if (data && data.length >= 3) {
+                            setTier1(data[0].points_required);
+                            setTier1Name(data[0].name || 'Nivel 1');
+                            setTier2(data[1].points_required);
+                            setTier2Name(data[1].name || 'Nivel 2');
+                            setTier3(data[2].points_required);
+                            setTier3Name(data[2].name || 'Nivel 3');
+                        }
+                    });
+            }, []);
+
+            const handleSaveRewards = async (e) => {
+                e.preventDefault();
+                try {
+                    // Borramos los niveles viejos
+                    await supabase.from('rewards').delete().eq('merchant_id', MERCHANT_ID);
+                    // Insertamos los 3 niveles nuevos
+                    const { error } = await supabase.from('rewards').insert([
+                        { merchant_id: MERCHANT_ID, name: tier1Name, points_required: tier1 },
+                        { merchant_id: MERCHANT_ID, name: tier2Name, points_required: tier2 },
+                        { merchant_id: MERCHANT_ID, name: tier3Name, points_required: tier3 }
+                    ]);
+                    if (error) throw error;
+                    showToast('Niveles de recompensas actualizados', 'success');
+                } catch (err) {
+                    showToast('Error al guardar: ' + err.message, 'error');
+                }
+            };
+
+            return (
+                <div className="card" style={{ maxWidth: '600px' }}>
+                    <div className="section-label">
+                        <div className="icon-badge green"><UsersIcon /></div>
+                        <div className="label-text">
+                            <h2>Mis Clientes Leales</h2>
+                            <p>Directorio y saldos</p>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#f8faf9', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
+                        <h3 style={{ fontSize: '1rem', marginTop: '0', marginBottom: '15px', textAlign: 'center' }}>Configurar Recompensas (Canjes)</h3>
+                        <form onSubmit={handleSaveRewards}>
+                            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                <input type="text" value={tier1Name} onChange={e => setTier1Name(e.target.value)} placeholder="Ej. $5 de descuento" style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #dcdde1' }} required />
+                                <input type="number" value={tier1} onChange={e => setTier1(Number(e.target.value))} placeholder="Pts" style={{ width: '80px', padding: '8px', borderRadius: '6px', border: '1px solid #dcdde1' }} required />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                <input type="text" value={tier2Name} onChange={e => setTier2Name(e.target.value)} placeholder="Ej. Café Gratis" style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #dcdde1' }} required />
+                                <input type="number" value={tier2} onChange={e => setTier2(Number(e.target.value))} placeholder="Pts" style={{ width: '80px', padding: '8px', borderRadius: '6px', border: '1px solid #dcdde1' }} required />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                                <input type="text" value={tier3Name} onChange={e => setTier3Name(e.target.value)} placeholder="Ej. Camiseta" style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #dcdde1' }} required />
+                                <input type="number" value={tier3} onChange={e => setTier3(Number(e.target.value))} placeholder="Pts" style={{ width: '80px', padding: '8px', borderRadius: '6px', border: '1px solid #dcdde1' }} required />
+                            </div>
+                            <button type="submit" className="btn-outline" style={{ width: '100%', borderColor: 'var(--primary)', color: 'var(--primary)' }}>Guardar Recompensas</button>
+                        </form>
+                    </div>
+
+                    <div style={{ background: '#f8faf9', padding: '15px', borderRadius: '10px', marginBottom: '20px', textAlign: 'center' }}>
+                        <QRIcon />
+                        <h3 style={{ fontSize: '1rem', marginTop: '10px' }}>Código QR de Auto-Registro</h3>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Pide a tus clientes que escaneen este código con su celular para unirse:</p>
+                        <div style={{ margin: '15px 0' }}>
+                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrLink)}`} alt="QR Auto-Registro" style={{ borderRadius: '8px', border: '4px solid white', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
+                        </div>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '5px' }}>O comparte este enlace directo:</p>
+                        <a href={qrLink} target="_blank" style={{ fontSize: '0.85rem', color: 'var(--primary)', wordBreak: 'break-all' }}>{qrLink}</a>
+                    </div>
+                    {loading ? <p>Cargando...</p> : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+                                    <th style={{ padding: '10px' }}>Cliente</th>
+                                    <th style={{ padding: '10px' }}>Teléfono</th>
+                                    <th style={{ padding: '10px' }}>Puntos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {customers.map((c, i) => (
+                                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                        <td style={{ padding: '10px', fontWeight: 'bold' }}>{c.customers.name}</td>
+                                        <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{c.customers.phone}</td>
+                                        <td style={{ padding: '10px', color: 'var(--primary)', fontWeight: 'bold' }}>{c.points_balance}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            );
+        }
+
+        // --- PANTALLA 5: DASHBOARD DEL CLIENTE ---
+        function CustomerDashboardScreen({ customer }) {
+            const [balance, setBalance] = useState(0);
+            const [tiers, setTiers] = useState([]);
+
+            React.useEffect(() => {
+                supabase.from('customer_loyalty_balances')
+                    .select('points_balance')
+                    .eq('customer_id', customer.id)
+                    .eq('merchant_id', MERCHANT_ID)
+                    .then(({data}) => {
+                        if (data && data.length) setBalance(data[0].points_balance);
+                    });
+
+                supabase.from('rewards').select('*').eq('merchant_id', MERCHANT_ID).order('points_required', {ascending: true})
+                    .then(({data}) => {
+                        if (data && data.length > 0) {
+                            setTiers(data.map(d => ({ points: d.points_required, name: d.name })));
+                        }
+                    });
+            }, [customer.id]);
+
+            return (
+                <div className="card" style={{ maxWidth: '400px', textAlign: 'center' }}>
+                    <div className="section-label" style={{ justifyContent: 'center', marginBottom: '10px' }}>
+                        <div className="icon-badge green"><StarIcon /></div>
+                    </div>
+                    <h2 style={{ fontSize: '1.2rem' }}>Mi Perfil de Lealtad</h2>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Hola, {customer.name}</p>
+                    
+                    <div style={{ background: '#f8faf9', padding: '20px', borderRadius: '12px', border: '1px solid #dcdde1', marginBottom: '20px' }}>
+                        <p style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-heading)' }}>PUNTOS DISPONIBLES</p>
+                        <h3 style={{ fontSize: '4rem', color: 'var(--primary)', margin: '10px 0' }}>{balance}</h3>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Visita nuestra sucursal para canjear recompensas exclusivas.</p>
+                    </div>
+
+                    {tiers.length > 0 && (
+                        <div style={{ textAlign: 'left' }}>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '15px' }}>Tus Recompensas</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {tiers.map((tier, idx) => {
+                                    const canRedeem = balance >= tier.points;
+                                    return (
+                                        <div key={idx} style={{ 
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                                            padding: '12px 15px', borderRadius: '8px', 
+                                            border: `2px solid ${canRedeem ? 'var(--primary)' : '#eee'}`,
+                                            opacity: canRedeem ? 1 : 0.6
+                                        }}>
+                                            <div>
+                                                <span style={{ fontWeight: 'bold', color: canRedeem ? 'var(--primary)' : 'var(--text-heading)' }}>{tier.name}</span>
+                                                {canRedeem && <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '2px' }}>¡Disponible para canjear! 🎁</div>}
+                                            </div>
+                                            <span style={{ fontWeight: 'bold', color: 'var(--text-muted)' }}>{tier.points} pts</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- APLICACIÓN PRINCIPAL ---
+        function App() {
+            const isSuperAdmin = urlParams.get('mode') === 'superadmin';
+            const isClientMode = urlParams.get('mode') === 'client';
+            const [screen, setScreen] = useState(isSuperAdmin ? 'superadmin' : (isClientMode ? 'self-register' : 'register'));
+            const [toast, setToast] = useState(null);
+            const [isAuth, setIsAuth] = useState(false);
+            const [merchantInfo, setMerchantInfo] = useState({ name: 'MIHI-FIDELIS', logo_url: null, primary_color: null });
+
+            const showToast = (message, type) => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            const handleNavigate = (newScreen) => {
+                setIsAuth(false); // Cierra sesión automáticamente al salir o cambiar de pestaña
+                setScreen(newScreen);
+            };
+
+            const getSubtitle = () => {
+                if(screen === 'superadmin') return "Centro de Control General";
+                if(screen === 'self-register') return "Auto-Registro de Cliente";
+                if(screen === 'login') return "Inicia Sesión para ver tus puntos";
+                if(screen === 'register') return "Registrar Nuevo Cliente";
+                if(screen === 'award') return "Otorgar Puntos al Cliente";
+                if(screen === 'dashboard') return "Panel de Administración";
+                return "Canjear Recompensa";
+            };
+
+            React.useEffect(() => {
+                if (!isSuperAdmin) {
+                    // Cargar el nombre y logo del negocio dinámicamente
+                    fetch(`${API_URL}/api/merchants/${MERCHANT_ID}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success && data.merchant) {
+                                setMerchantInfo(data.merchant);
+                                if (data.merchant.primary_color) document.documentElement.style.setProperty('--primary', data.merchant.primary_color);
+                            }
+                        }).catch(err => console.log('Error cargando info del negocio'));
+                }
+            }, []);
+
+            return (
+                <div className="app-container">
+                    <header>
+                        <div className="logo-container">
+                            {merchantInfo.logo_url ? (
+                                <img src={merchantInfo.logo_url} alt={merchantInfo.name} style={{ height: '32px', borderRadius: '6px', marginRight: '10px' }} />
+                            ) : (
+                                <div className="logo-icon"><LeafIcon /></div>
+                            )}
+                            <h1 className="app-name">{merchantInfo.name}</h1>
+                        </div>
+                        <p className="screen-subtitle">{getSubtitle()}</p>
+                        
+                        {!isClientMode && !isSuperAdmin && (
+                            <div className="nav-pills">
+                                {screen !== 'dashboard' && <button className="pill-btn" style={{borderColor: '#2c3e50', color: '#2c3e50'}} onClick={() => handleNavigate('dashboard')}>← Volver al Dashboard</button>}
+                            </div>
+                        )}
+                    </header>
+
+                    <main style={{width: '100%', display: 'flex', justifyContent: 'center'}}>
+                        {screen === 'superadmin' && isAuth?.role === 'superadmin' && <SuperAdminScreen showToast={showToast} />}
+                        {screen === 'self-register' && <SelfRegisterScreen showToast={showToast} setScreen={handleNavigate} />}
+                        {screen === 'register' && !isClientMode && <RegisterScreen showToast={showToast} setScreen={handleNavigate} />}
+                        
+                        {screen !== 'register' && screen !== 'self-register' && !isAuth && <LoginScreen showToast={showToast} onLogin={setIsAuth} currentScreen={screen} setScreen={handleNavigate} />}
+                        
+                        {screen === 'award' && isAuth?.role === 'admin' && <AwardScreen showToast={showToast} setScreen={handleNavigate} />}
+                        {screen === 'redeem' && isAuth?.role === 'admin' && <RedeemScreen showToast={showToast} setScreen={handleNavigate} />}
+                        {screen === 'dashboard' && isAuth?.role === 'admin' && <DashboardScreen showToast={showToast} setScreen={handleNavigate} />}
+
+                        {/* Si un cliente inicia sesión, siempre ve solo su pantalla privada */}
+                        {screen !== 'register' && isAuth?.role === 'customer' && <CustomerDashboardScreen customer={isAuth.data} />}
+                    </main>
+
+                    {toast && <div className={`toast ${toast.type}`}>{toast.message}</div>}
+                </div>
+            );
+        }
+
+        // Montar la app en el div#root
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
